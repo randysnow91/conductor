@@ -1,0 +1,22 @@
+{
+  "name": "conductor",
+  "version": "1.0.0",
+  "description": "Orchestrator for the newsletter pipeline (R2) - calls Content Builder, files the Issue in EmailServer, exits",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "daily": "tsx src/index.ts daily",
+    "daily:dry": "tsx src/index.ts daily --dry-run"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
