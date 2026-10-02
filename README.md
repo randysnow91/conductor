@@ -28,6 +28,7 @@ cp .env.example .env   # fill in URLs, secret, and NEWSLETTERS
 ## Running
 
 ```bash
+npm run check-env   # validate .env against the live services (read-only, prints no secrets)
 npm run daily:dry   # generate content and log it, but don't file it in EmailServer
 npm run daily       # full run: generate and file a draft Issue
 npm run build && npm start -- daily   # what the Render Cron Job runs

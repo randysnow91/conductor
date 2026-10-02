@@ -1,6 +1,6 @@
 # Claude Code Build Spec — Conductor (R2)
 
-**Status:** v1.1 — repo scaffolded (M0), M1 not started.
+**Status:** v1.2 — M1 code built and verified locally against the live services; Render Cron Job not yet set up.
 **Derived from:** `CONTENT-PIPELINE-ARCHITECTURE.md` (the cross-repo design —
 read it first, especially §7, §8, §9, §12, §16) + the *real*, current
 contracts of the other two services (§4.4 below) — not just their spec text,
@@ -13,6 +13,7 @@ architecture doc §16.5 for why this isn't one shared document.
 |---------|------|---------|
 | v1.0 | 2026-09-29 | First draft, written once EmailServer's M1 (Issue ingestion + review UI) was built and verified, and Content Builder's M0–M3 (daily pipeline, Reviewer, RAG) were built, verified, and deployed. Scoped around what those two services can *actually* do today, not just what the architecture doc originally described — see §4.4. |
 | v1.1 | 2026-10-01 | Kickoff decisions with the operator — see §4.5: daily cron at 12:45 UTC (ready for an ~8:30 AM Central review), manual send until EmailServer's auto-send cron exists, weekly Cron Job service deferred to M2, `--dry-run` flag added to M1, explicit long timeout on `/generate`. Repo scaffolded and pushed to GitHub (`randysnow91/conductor`). |
+| v1.2 | 2026-10-02 | M1 daily pipeline built (`src/daily.ts`, `services.ts`, `http.ts`, `env.ts`) plus `npm run check-env`. All acceptance checks verified by hand-run against the deployed services (see M1 below). Found and fixed outside this repo: EmailServer's Render env was missing `OPERATOR_EMAIL`, so the draft-ready email was silently skipped. Logged two cross-service gaps in §10. |
 
 > **How to use this document.** The architecture doc says *what* and *why*,
 > across all three services. This spec says *how, with what, and in what
@@ -309,22 +310,33 @@ EmailServer's review step.
    against real, deployed Content Builder and EmailServer.
 
 **Acceptance Criteria:**
-- [ ] Running the daily entrypoint by hand produces a real draft Issue
+- [x] Running the daily entrypoint by hand produces a real draft Issue
       visible in EmailServer's `/admin/issues` for the configured
       newsletter, with a `send_after` timestamp EmailServer computed itself.
-- [ ] The operator receives EmailServer's existing "draft ready to review"
+      *(2026-10-02: real run filed `96071a0f…` in 144s — 7 articles, 2
+      Reviewer flags, so `send_after` correctly NULL. The unflagged
+      zero-article run below got a computed `send_after` of +4 h.)*
+- [x] The operator receives EmailServer's existing "draft ready to review"
       email — confirming Conductor didn't need to build its own
-      notification path.
-- [ ] Content Builder returning a zero-article/empty generation still
-      produces a filed (flagged, no-`send_after`) Issue, not a Conductor
-      failure — verified by temporarily forcing that case (matches
-      EmailServer's own guardrail, which is already verified on its side).
-- [ ] Content Builder unreachable, or EmailServer rejecting the post,
+      notification path. *(2026-10-02, after adding the missing
+      `OPERATOR_EMAIL` to EmailServer's Render env; review link verified.)*
+- [x] Content Builder returning a zero-article/empty generation still
+      produces a filed Issue, not a Conductor failure — verified by
+      temporarily forcing that case. *(2026-10-02, via a local fake Content
+      Builder returning its real zero-article payload: filed `502e4c24…`,
+      `WARN` logged, exit 0. **But** it was filed *with* a `send_after`,
+      not without — the guardrail gap in §10.)*
+- [x] Content Builder unreachable, or EmailServer rejecting the post,
       produces a clear log line and a non-zero exit — verified by pointing
-      at a wrong URL/key temporarily.
-- [ ] A second newsletter's failure doesn't prevent a first newsletter's
+      at a wrong URL/key temporarily. *(2026-10-02: bad config, unreachable
+      Content Builder, wrong Content Builder secret, wrong newsletter key —
+      all exit 1 with the failing call named.)*
+- [x] A second newsletter's failure doesn't prevent a first newsletter's
       success in the same run (§7.1) — verified with one real and one
-      deliberately-broken entry in `NEWSLETTERS`.
+      deliberately-broken entry in `NEWSLETTERS`. *(2026-10-02, in a
+      `--dry-run`: broken entry 401'd, real one generated, exit 1.)*
+- [ ] The daily Render Cron Job runs on schedule and files a draft
+      unattended (task 5).
 
 ---
 
@@ -379,6 +391,18 @@ Same boundaries as the architecture doc §14, plus:
 
 ## 10. Known Limitations & Open Questions to Revisit
 
+- **A zero-article Issue currently *does* get a `send_after`** (found
+  2026-10-02 reading both services' code). Content Builder's empty fallback
+  is a "🔍 No Articles Today" `text` block with **no** Reviewer flags, and
+  EmailServer's `computeSendAfter` only withholds `send_after` for flags —
+  so architecture doc §9's "broken/empty generation can't auto-send"
+  guardrail isn't actually enforced. Harmless while EmailServer's auto-send
+  cron is unbuilt, but must be fixed **before** auto-send ships — in
+  EmailServer (no `article_card` blocks → no `send_after`) or Content Builder
+  (emit a flag), not here (§7.2). Conductor logs a `WARN` for this case.
+- **No duplicate-draft protection.** EmailServer inserts a new Issue on every
+  `POST /api/issues`; re-running the daily job by hand files a second draft
+  for the same day. Skip the extra one in the review UI.
 - **Content Builder currently hardcodes "AI news"-shaped content**, not
   just as a default — its own spec (v1.1 changelog) flags that a real
   second, non-AI newsletter needs that generalized, not copied. EmailServer
@@ -397,4 +421,4 @@ Same boundaries as the architecture doc §14, plus:
 
 ---
 
-*End of Build Spec v1.1 — scaffolded, M1 not started.*
+*End of Build Spec v1.2 — M1 verified locally; Render Cron Job pending.*
