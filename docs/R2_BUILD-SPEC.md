@@ -1,6 +1,6 @@
 # Claude Code Build Spec — Conductor (R2)
 
-**Status:** v1.3 — M1 complete (daily cron live on Render since 2026-10-03). M2 complete (weekly Cron Job live on Render since 2026-10-15).
+**Status:** v1.4 — M1 complete (daily cron live on Render since 2026-10-03). M2 complete (weekly Cron Job live on Render since 2026-10-15).
 **Derived from:** `CONTENT-PIPELINE-ARCHITECTURE.md` (the cross-repo design —
 read it first, especially §7, §8, §9, §12, §16) + the *real*, current
 contracts of the other two services (§4.4 below) — not just their spec text,
@@ -15,6 +15,7 @@ architecture doc §16.5 for why this isn't one shared document.
 | v1.1 | 2026-10-01 | Kickoff decisions with the operator — see §4.5: daily cron at 12:45 UTC (ready for an ~8:30 AM Central review), manual send until EmailServer's auto-send cron exists, weekly Cron Job service deferred to M2, `--dry-run` flag added to M1, explicit long timeout on `/generate`. Repo scaffolded and pushed to GitHub (`randysnow91/conductor`). |
 | v1.2 | 2026-10-02 | M1 daily pipeline built (`src/daily.ts`, `services.ts`, `http.ts`, `env.ts`) plus `npm run check-env`. All acceptance checks verified by hand-run against the deployed services (see M1 below). Found and fixed outside this repo: EmailServer's Render env was missing `OPERATOR_EMAIL`, so the draft-ready email was silently skipped. Logged two cross-service gaps in §10. |
 | v1.3 | 2026-10-15 | M2 weekly pipeline built (`src/weekly.ts`; shared per-newsletter loop, logging and `--dry-run` moved to `src/run.ts`). Contract confirmed against Content Builder's real M5 code (`d4f32ed`): `weekContent: IssuePayload[]`, each `date` built from EmailServer's `created_at`. Kickoff decisions in §4.6: Friday `0 19 * * 5` UTC, rolling 7-day window. |
+| v1.4 | 2026-10-15 | Cross-repo sync before launch. M2's last open check (the `both`-subscriber Friday case) ticked - verified in EmailServer's M2. Noted that EmailServer was rejecting any Issue carrying Content Builder's `dropped_article` flag (400) from 2026-10-05 until a fix on 2026-10-15 - a daily run that logged a 400 from `POST /api/issues` in that window was this, not a Conductor bug. No code change here. |
 
 > **How to use this document.** The architecture doc says *what* and *why*,
 > across all three services. This spec says *how, with what, and in what
@@ -402,10 +403,12 @@ doc §8, §15 decision 2) so it's ready the moment Content Builder's M5 ships
       day, the new weekly Render Cron Job service (`0 19 * * 5`, built from
       `27c8461`) was triggered by hand: it filed a weekly draft and the
       operator got the weekly email with working links.)*
-- [ ] A `both`-preference subscriber's Friday behavior (separate daily +
+- [x] A `both`-preference subscriber's Friday behavior (separate daily +
       weekly sends, no dedup) is EmailServer's concern, already documented
       in its own spec — not re-verified here, just confirmed not broken by
-      anything Conductor does.
+      anything Conductor does. Verified 2026-10-15 in EmailServer's M2: the
+      `both` subscriber received the daily and the weekly as two separate
+      sends.
 
 ---
 
@@ -458,4 +461,4 @@ Same boundaries as the architecture doc §14, plus:
 
 ---
 
-*End of Build Spec v1.3 — M1 and M2 complete.*
+*End of Build Spec v1.4 — M1 and M2 complete.*
