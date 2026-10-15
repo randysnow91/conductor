@@ -1,6 +1,6 @@
 # Claude Code Build Spec — Conductor (R2)
 
-**Status:** v1.3 — M1 complete (daily cron live on Render since 2026-10-03). M2 (weekly) verified end-to-end against the deployed services 2026-10-15; weekly Render Cron Job service pending.
+**Status:** v1.3 — M1 complete (daily cron live on Render since 2026-10-03). M2 complete (weekly Cron Job live on Render since 2026-10-15).
 **Derived from:** `CONTENT-PIPELINE-ARCHITECTURE.md` (the cross-repo design —
 read it first, especially §7, §8, §9, §12, §16) + the *real*, current
 contracts of the other two services (§4.4 below) — not just their spec text,
@@ -398,8 +398,10 @@ doc §8, §15 decision 2) so it's ready the moment Content Builder's M5 ships
       is built; note the date it actually gets verified when it happens.
       *(2026-10-15, after Content Builder was redeployed: hand run against
       the deployed services filed `1ea29b5a…` — 4 sent dailies → 11 blocks,
-      5 top stories, in 28s; `status=draft`, no `send_after`, exit 0. The
-      weekly Render Cron Job service itself is still to be created.)*
+      5 top stories, in 28s; `status=draft`, no `send_after`, exit 0. Same
+      day, the new weekly Render Cron Job service (`0 19 * * 5`, built from
+      `27c8461`) was triggered by hand: it filed a weekly draft and the
+      operator got the weekly email with working links.)*
 - [ ] A `both`-preference subscriber's Friday behavior (separate daily +
       weekly sends, no dedup) is EmailServer's concern, already documented
       in its own spec — not re-verified here, just confirmed not broken by
@@ -456,4 +458,4 @@ Same boundaries as the architecture doc §14, plus:
 
 ---
 
-*End of Build Spec v1.3 — M1 complete; M2 verified; weekly Cron Job service pending.*
+*End of Build Spec v1.3 — M1 and M2 complete.*
