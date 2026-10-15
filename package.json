@@ -8,6 +8,8 @@
     "start": "node dist/index.js",
     "daily": "tsx src/index.ts daily",
     "daily:dry": "tsx src/index.ts daily --dry-run",
+    "weekly": "tsx src/index.ts weekly",
+    "weekly:dry": "tsx src/index.ts weekly --dry-run",
     "check-env": "tsx src/check-env.ts"
   },
   "license": "ISC",

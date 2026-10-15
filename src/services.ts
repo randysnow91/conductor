@@ -16,13 +16,35 @@ export async function getNewsletterConfig(env: Env, newsletter: Newsletter): Pro
   return JSON.parse(text) as NewsletterConfig;
 }
 
+// What Content Builder's weekly wants per day (its R2_BUILD-SPEC.md §6):
+// an IssuePayload. EmailServer stores no `date`, so it comes from created_at -
+// the daily cron runs at 12:45 UTC, the same UTC day Content Builder stamped.
+export type DailyIssue = { type: "daily"; date: string; blocks: unknown };
+
+type IssueRow = { type: "daily"; blocks: unknown; created_at: string };
+
+export async function getSentDailies(env: Env, newsletter: Newsletter, since: Date): Promise<DailyIssue[]> {
+  const query = new URLSearchParams({ type: "daily", status: "sent", since: since.toISOString() });
+  const { text } = await request(
+    "EmailServer GET issues",
+    `${env.emailServerUrl}/api/newsletters/${encodeURIComponent(newsletter.id)}/issues?${query}`,
+    { headers: { "x-content-api-key": newsletter.contentApiKey }, timeoutMs: EMAIL_SERVER_TIMEOUT_MS }
+  );
+  const { issues } = JSON.parse(text) as { issues: IssueRow[] };
+  return issues.map((row) => ({ type: row.type, date: row.created_at.slice(0, 10), blocks: row.blocks }));
+}
+
+export type GenerateRequest =
+  | { type: "daily"; newsletterConfig: NewsletterConfig }
+  | { type: "weekly"; newsletterConfig: NewsletterConfig; weekContent: DailyIssue[] };
+
 // Returns the Issue as the exact JSON text Content Builder sent, so it can be
 // posted to EmailServer byte-for-byte unchanged (§7.2 - Conductor is a pass-through).
-export async function generateDailyIssue(env: Env, newsletterConfig: NewsletterConfig): Promise<string> {
+export async function generateIssue(env: Env, body: GenerateRequest): Promise<string> {
   const { text } = await request("Content Builder POST /generate", `${env.contentBuilderUrl}/generate`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-conductor-secret": env.contentBuilderSecret },
-    body: JSON.stringify({ type: "daily", newsletterConfig }),
+    body: JSON.stringify(body),
     timeoutMs: GENERATE_TIMEOUT_MS,
   });
   return text;

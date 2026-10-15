@@ -1,6 +1,6 @@
 # Claude Code Build Spec — Conductor (R2)
 
-**Status:** v1.2 — M1 code built and verified locally against the live services; Render Cron Job not yet set up.
+**Status:** v1.3 — M1 complete (daily cron live on Render since 2026-10-03). M2 (weekly) verified end-to-end against the deployed services 2026-10-15; weekly Render Cron Job service pending.
 **Derived from:** `CONTENT-PIPELINE-ARCHITECTURE.md` (the cross-repo design —
 read it first, especially §7, §8, §9, §12, §16) + the *real*, current
 contracts of the other two services (§4.4 below) — not just their spec text,
@@ -14,6 +14,7 @@ architecture doc §16.5 for why this isn't one shared document.
 | v1.0 | 2026-09-29 | First draft, written once EmailServer's M1 (Issue ingestion + review UI) was built and verified, and Content Builder's M0–M3 (daily pipeline, Reviewer, RAG) were built, verified, and deployed. Scoped around what those two services can *actually* do today, not just what the architecture doc originally described — see §4.4. |
 | v1.1 | 2026-10-01 | Kickoff decisions with the operator — see §4.5: daily cron at 12:45 UTC (ready for an ~8:30 AM Central review), manual send until EmailServer's auto-send cron exists, weekly Cron Job service deferred to M2, `--dry-run` flag added to M1, explicit long timeout on `/generate`. Repo scaffolded and pushed to GitHub (`randysnow91/conductor`). |
 | v1.2 | 2026-10-02 | M1 daily pipeline built (`src/daily.ts`, `services.ts`, `http.ts`, `env.ts`) plus `npm run check-env`. All acceptance checks verified by hand-run against the deployed services (see M1 below). Found and fixed outside this repo: EmailServer's Render env was missing `OPERATOR_EMAIL`, so the draft-ready email was silently skipped. Logged two cross-service gaps in §10. |
+| v1.3 | 2026-10-15 | M2 weekly pipeline built (`src/weekly.ts`; shared per-newsletter loop, logging and `--dry-run` moved to `src/run.ts`). Contract confirmed against Content Builder's real M5 code (`d4f32ed`): `weekContent: IssuePayload[]`, each `date` built from EmailServer's `created_at`. Kickoff decisions in §4.6: Friday `0 19 * * 5` UTC, rolling 7-day window. |
 
 > **How to use this document.** The architecture doc says *what* and *why*,
 > across all three services. This spec says *how, with what, and in what
@@ -187,6 +188,26 @@ mark it done from one successful run once Content Builder's M5 ships.
   Builder on Render's free tier (cold start + a multi-minute run) can approach
   that, so the `/generate` call sets its own generous timeout (§7.3).
 
+### 4.6 Weekly decisions (2026-10-15)
+
+- **Weekly schedule: `0 19 * * 5` (UTC)** — Friday 2 PM CDT / 1 PM CST, the
+  architecture doc's "Friday ~2 PM". That Friday's daily has normally been
+  sent by then, so it's included. Same accepted DST drift as §4.5.
+- **The week is a rolling 7 days** (`since` = run time − 7 days), not "since
+  Monday". Consecutive Friday runs tile exactly, so every sent daily —
+  weekend ones included — lands in exactly one weekly. A by-hand run at a
+  different time shifts its own window; that's fine.
+- **`weekContent` is built, not passed through.** EmailServer's issue rows
+  (`created_at`, `raw_html`, no `date`) aren't IssuePayloads, so Conductor
+  maps each to `{ type, date: created_at.slice(0, 10), blocks }` — what
+  Content Builder's own spec asks for. This is the *input* to Content
+  Builder; the weekly Issue it *returns* is still posted to EmailServer
+  unchanged (§7.2). `date` from UTC `created_at` matches the daily's own
+  `date` because the daily cron runs at 12:45 UTC.
+- **An empty week isn't a failure.** Content Builder returns a "quiet week"
+  Issue; Conductor files it with a `WARN`, exit 0 (same as §4.3's
+  zero-article daily).
+
 ---
 
 ## 5. Environment Variables
@@ -234,12 +255,12 @@ just the architecture doc) as of 2026-09-29.
   (`{ type: "daily", date, blocks, reviewerFlags? }`) — `date` is set by
   Content Builder itself (today's date); Conductor doesn't need to supply
   one.
-- **Weekly**: currently returns `501` — not implemented yet (§4.4). The
-  request shape it will eventually want — almost certainly the week's
-  content added to the body (architecture doc §15, decision 2, calls this
-  `weekContent`) — isn't pinned in Content Builder's code yet. Don't guess
-  at a field name; confirm against Content Builder's actual route when its
-  M5 lands.
+- **Weekly** (Content Builder M5, `d4f32ed`): body adds `weekContent:
+  IssuePayload[]` — required, `400` if not an array; `[]` is valid (quiet
+  week). Each entry needs `date` and `blocks`; only `article_card` blocks
+  are used. Returns `200` with `{ type: "weekly", date, blocks,
+  reviewerFlags: [] }` in ~15-30s (one agent call, not the daily's
+  research run). Request body limit is 2mb.
 - A `500` here is Content Builder's own agents failing outright (rare —
   its pipeline stages already degrade gracefully internally, see its own
   spec §4.3) — treat as a real Conductor-run failure (§4.3, §9).
@@ -335,12 +356,17 @@ EmailServer's review step.
       success in the same run (§7.1) — verified with one real and one
       deliberately-broken entry in `NEWSLETTERS`. *(2026-10-02, in a
       `--dry-run`: broken entry 401'd, real one generated, exit 1.)*
-- [ ] The daily Render Cron Job runs on schedule and files a draft
-      unattended (task 5).
+- [x] The daily Render Cron Job runs on schedule and files a draft
+      unattended (task 5). *(2026-10-03: scheduled run filed `4b35ef19…` in
+      192s. The 2026-10-02 manual trigger and 2026-10-04 run failed on a
+      Content Builder bug — every article's `url` missing, so its own
+      validator 500'd — and Conductor reported both correctly: exit 1,
+      Render alert email. Handed off in
+      `ContentBuilder/WorkingNotes/HANDOFF-2026-10-04-missing-urls.md`.)*
 
 ---
 
-### M2: Weekly Pipeline (built, verification blocked)
+### M2: Weekly Pipeline
 
 **Goals:** The weekly path is coded to the documented contract (architecture
 doc §8, §15 decision 2) so it's ready the moment Content Builder's M5 ships
@@ -358,13 +384,22 @@ doc §8, §15 decision 2) so it's ready the moment Content Builder's M5 ships
    created in this milestone, not M1 (§4.5).
 
 **Acceptance Criteria:**
-- [ ] Code complete and reviewed against Content Builder's actual `/generate`
+- [x] Code complete and reviewed against Content Builder's actual `/generate`
       weekly contract once it exists — **not just the architecture doc's
-      description of it.**
-- [ ] A real end-to-end weekly run files a draft weekly Issue in EmailServer
+      description of it.** *(2026-10-15: against `d4f32ed`'s route and
+      `generateWeekly.ts`. Dry run with Content Builder's M5 run locally and
+      the real EmailServer: 4 sent dailies (Oct 9, 10, 14, 15) → 25 articles
+      → weekly with 5 top stories in 29s, exit 0. Bad key → 401 named, exit
+      1. The **deployed** Content Builder still returned `501` that morning —
+      M5 was pushed but not yet live on Render.)*
+- [x] A real end-to-end weekly run files a draft weekly Issue in EmailServer
       with no `send_after` (always manually approved, per architecture doc
       §9) — this criterion can't be checked off until Content Builder's M5
       is built; note the date it actually gets verified when it happens.
+      *(2026-10-15, after Content Builder was redeployed: hand run against
+      the deployed services filed `1ea29b5a…` — 4 sent dailies → 11 blocks,
+      5 top stories, in 28s; `status=draft`, no `send_after`, exit 0. The
+      weekly Render Cron Job service itself is still to be created.)*
 - [ ] A `both`-preference subscriber's Friday behavior (separate daily +
       weekly sends, no dedup) is EmailServer's concern, already documented
       in its own spec — not re-verified here, just confirmed not broken by
@@ -421,4 +456,4 @@ Same boundaries as the architecture doc §14, plus:
 
 ---
 
-*End of Build Spec v1.2 — M1 verified locally; Render Cron Job pending.*
+*End of Build Spec v1.3 — M1 complete; M2 verified; weekly Cron Job service pending.*

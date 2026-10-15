@@ -31,8 +31,18 @@ cp .env.example .env   # fill in URLs, secret, and NEWSLETTERS
 npm run check-env   # validate .env against the live services (read-only, prints no secrets)
 npm run daily:dry   # generate content and log it, but don't file it in EmailServer
 npm run daily       # full run: generate and file a draft Issue
-npm run build && npm start -- daily   # what the Render Cron Job runs
+npm run weekly:dry  # weekly from the last 7 days' sent dailies, not filed
+npm run weekly      # full weekly run: file a draft weekly Issue
+npm run build && npm start -- daily   # what the Render Cron Jobs run (daily / weekly)
 ```
+
+Two Render Cron Job services from this repo, same build command
+(`npm install && npm run build`):
+
+| Service | Schedule (UTC) | Start command |
+|---|---|---|
+| daily | `45 12 * * *` (7:45 AM CDT) | `node dist/index.js daily` |
+| weekly | `0 19 * * 5` (Fri 2 PM CDT) | `node dist/index.js weekly` |
 
 Exits non-zero if any newsletter's run fails, so Render's cron alerting emails
 the operator.

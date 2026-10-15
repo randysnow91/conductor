@@ -3,6 +3,7 @@
 // emails the operator (docs/R2_BUILD-SPEC.md §4.3).
 import { runDaily } from "./daily";
 import { loadEnv } from "./env";
+import { runWeekly } from "./weekly";
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
@@ -13,14 +14,9 @@ async function main(): Promise<number> {
     console.error("Usage: conductor <daily|weekly> [--dry-run]");
     return 2;
   }
-  if (mode === "weekly") {
-    console.error("[conductor] weekly pipeline not built yet (M2)");
-    return 1;
-  }
-
   const env = loadEnv();
-  console.log(`[conductor] daily run for ${env.newsletters.length} newsletter(s)${dryRun ? " (dry run)" : ""}`);
-  const failed = await runDaily(env, dryRun);
+  console.log(`[conductor] ${mode} run for ${env.newsletters.length} newsletter(s)${dryRun ? " (dry run)" : ""}`);
+  const failed = await (mode === "daily" ? runDaily : runWeekly)(env, dryRun);
   console.log(`[conductor] done: ${env.newsletters.length - failed} succeeded, ${failed} failed`);
   return failed === 0 ? 0 : 1;
 }
