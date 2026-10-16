@@ -16,8 +16,8 @@ export async function getNewsletterConfig(env: Env, newsletter: Newsletter): Pro
   return JSON.parse(text) as NewsletterConfig;
 }
 
-// What Content Builder's weekly wants per day (its R2_BUILD-SPEC.md §6):
-// an IssuePayload. EmailServer stores no `date`, so it comes from created_at -
+// What Content Builder wants per sent daily - the weekly's weekContent and the
+// daily's recentContent (its R2_BUILD-SPEC.md §6): an IssuePayload. EmailServer stores no `date`, so it comes from created_at -
 // the daily cron runs at 12:45 UTC, the same UTC day Content Builder stamped.
 export type DailyIssue = { type: "daily"; date: string; blocks: unknown };
 
@@ -35,7 +35,7 @@ export async function getSentDailies(env: Env, newsletter: Newsletter, since: Da
 }
 
 export type GenerateRequest =
-  | { type: "daily"; newsletterConfig: NewsletterConfig }
+  | { type: "daily"; newsletterConfig: NewsletterConfig; recentContent?: DailyIssue[] }
   | { type: "weekly"; newsletterConfig: NewsletterConfig; weekContent: DailyIssue[] };
 
 // Returns the Issue as the exact JSON text Content Builder sent, so it can be

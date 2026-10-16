@@ -1,6 +1,6 @@
 # Claude Code Build Spec — Conductor (R2)
 
-**Status:** v1.4 — M1 complete (daily cron live on Render since 2026-10-03). M2 complete (weekly Cron Job live on Render since 2026-10-15).
+**Status:** v1.5 — M1 complete (daily cron live on Render since 2026-10-03). M2 complete (weekly Cron Job live on Render since 2026-10-15). Daily now sends `recentContent` for Content Builder's repeat check (§4.7).
 **Derived from:** `CONTENT-PIPELINE-ARCHITECTURE.md` (the cross-repo design —
 read it first, especially §7, §8, §9, §12, §16) + the *real*, current
 contracts of the other two services (§4.4 below) — not just their spec text,
@@ -16,6 +16,7 @@ architecture doc §16.5 for why this isn't one shared document.
 | v1.2 | 2026-10-02 | M1 daily pipeline built (`src/daily.ts`, `services.ts`, `http.ts`, `env.ts`) plus `npm run check-env`. All acceptance checks verified by hand-run against the deployed services (see M1 below). Found and fixed outside this repo: EmailServer's Render env was missing `OPERATOR_EMAIL`, so the draft-ready email was silently skipped. Logged two cross-service gaps in §10. |
 | v1.3 | 2026-10-15 | M2 weekly pipeline built (`src/weekly.ts`; shared per-newsletter loop, logging and `--dry-run` moved to `src/run.ts`). Contract confirmed against Content Builder's real M5 code (`d4f32ed`): `weekContent: IssuePayload[]`, each `date` built from EmailServer's `created_at`. Kickoff decisions in §4.6: Friday `0 19 * * 5` UTC, rolling 7-day window. |
 | v1.4 | 2026-10-15 | Cross-repo sync before launch. M2's last open check (the `both`-subscriber Friday case) ticked - verified in EmailServer's M2. Noted that EmailServer was rejecting any Issue carrying Content Builder's `dropped_article` flag (400) from 2026-10-05 until a fix on 2026-10-15 - a daily run that logged a 400 from `POST /api/issues` in that window was this, not a Conductor bug. No code change here. |
+| v1.5 | 2026-10-16 | Daily sends `recentContent` — the last 7 days' sent dailies — so Content Builder's new dedup can drop stories readers already got (§4.7). Best effort: if that fetch fails, the daily goes out without it. Window constant now shared with the weekly (`src/run.ts`). Verified with real EmailServer data against a fake Content Builder that recorded the request; the real dedup awaits Content Builder's deploy. |
 
 > **How to use this document.** The architecture doc says *what* and *why*,
 > across all three services. This spec says *how, with what, and in what
@@ -209,6 +210,23 @@ mark it done from one successful run once Content Builder's M5 ships.
   Issue; Conductor files it with a `WARN`, exit 0 (same as §4.3's
   zero-article daily).
 
+### 4.7 Daily repeat check (2026-10-16)
+
+Content Builder's daily `/generate` takes an optional `recentContent` (same
+shape as the weekly's `weekContent`) and drops candidates whose link already
+went out. Conductor's side:
+
+- **Same rolling 7 days as the weekly**, one shared constant (`WEEK_MS` in
+  `src/run.ts`), so the two can't drift apart.
+- **Only `status=sent` dailies.** A skipped draft never reached readers, so
+  its stories are fair game again.
+- **Best effort.** If the issues fetch fails, Conductor logs a `WARN` and
+  omits `recentContent` — Content Builder treats that as "no check." A missed
+  duplicate check shouldn't cost the day's email; config or `/generate`
+  failures are still real failures (§4.3).
+- **Safe in either deploy order.** A Content Builder without the dedup
+  ignores the extra field.
+
 ---
 
 ## 5. Environment Variables
@@ -244,7 +262,8 @@ just the architecture doc) as of 2026-09-29.
 
 **GET `{EMAIL_SERVER_URL}/api/newsletters/:id/issues?type=daily&status=sent&since=<ISO date>`**
 *(header: `x-content-api-key`)*
-- For the weekly pipeline (M2): fetches the week's sent daily Issues.
+- For the weekly pipeline (M2) and the daily's repeat check (§4.7):
+  fetches the last 7 days' sent daily Issues.
 - Returns `{ issues: [{ id, type, status, blocks, raw_html, created_at }] }`.
 
 **POST `{CONTENT_BUILDER_URL}/generate`**
@@ -252,7 +271,9 @@ just the architecture doc) as of 2026-09-29.
 - Body: `{ type: "daily" | "weekly", newsletterConfig: { topics, voice } }`
   — `topics` and `voice` must both be non-empty strings or Content Builder
   rejects with `400`.
-- **Daily**: returns `200` with an `IssuePayload`
+- **Daily**: optional `recentContent: IssuePayload[]` (same shape as
+  `weekContent`; `400` if present but not an array) — recent sent dailies
+  whose links it won't repeat (§4.7). Returns `200` with an `IssuePayload`
   (`{ type: "daily", date, blocks, reviewerFlags? }`) — `date` is set by
   Content Builder itself (today's date); Conductor doesn't need to supply
   one.
@@ -461,4 +482,4 @@ Same boundaries as the architecture doc §14, plus:
 
 ---
 
-*End of Build Spec v1.4 — M1 and M2 complete.*
+*End of Build Spec v1.5 — M1 and M2 complete; daily repeat check added.*

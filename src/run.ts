@@ -7,6 +7,12 @@ import { postIssue } from "./services";
 const DRY_RUN_DIR = "dry-run";
 
 export type Mode = "daily" | "weekly";
+
+// "Recent" for both pipelines: the weekly's window and the daily's
+// don't-repeat window. A rolling 7 days, so consecutive Friday weeklies tile
+// exactly and every sent daily lands in one weekly (§4.6).
+export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type Log = (msg: string) => void;
 
 // Read-only peek at the Issue for logging - never used to change what gets posted.

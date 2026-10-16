@@ -3,12 +3,8 @@
 // POST /api/issues. EmailServer never gives a weekly a send_after, so it
 // always waits for the operator's approval.
 import type { Env } from "./env";
-import { describe, fileIssue, runAll } from "./run";
+import { describe, fileIssue, runAll, WEEK_MS } from "./run";
 import { generateIssue, getNewsletterConfig, getSentDailies } from "./services";
-
-// A rolling 7 days rather than "since Monday": consecutive Friday runs tile
-// exactly, so every sent daily (weekends included) lands in one weekly (§4.6).
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Returns the number of newsletters whose run failed.
 export function runWeekly(env: Env, dryRun: boolean): Promise<number> {
